@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AT Handoff Prototype</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: #f4f7fb; font-family: system-ui, Arial, sans-serif; color: #12263f; }
+  .card { background: #fff; border: 1px solid #d5e0ef; border-radius: 12px; }
+  h2 { margin: 0 0 12px; font-size: 18px; color: #1a56a0; }
+
+  /* Tracker */
+  #tracker { padding: 16px 24px 20px; margin-bottom: 20px; }
+  .meta { display: flex; justify-content: space-between; color: #5a6b82; font-size: 14px; }
+  .track { position: relative; display: flex; justify-content: space-between; margin-top: 14px; }
+  .track::before, .fill { content: ""; position: absolute; top: 9px; left: 8%; height: 4px; border-radius: 2px; }
+  .track::before { right: 8%; background: #d5e0ef; }
+  .fill { background: #2f7bd6; width: 0; transition: width 2s ease-in-out; }
+  .stage { position: relative; flex: 1; text-align: center; font-size: 14px; color: #5a6b82; }
+  .dot { width: 22px; height: 22px; margin: 0 auto 6px; border-radius: 50%; background: #fff; border: 3px solid #d5e0ef; transition: all 1s; }
+  .stage.done .dot { background: #2f7bd6; border-color: #2f7bd6; }
+  .stage.current .dot { background: #22a55b; border-color: #22a55b; box-shadow: 0 0 0 5px #cdeedb; }
+  .stage.current { color: #12263f; font-weight: 700; }
+
+  /* Main layout */
+  main { display: grid; grid-template-columns: 1fr 2fr 2fr; gap: 20px; height: calc(100vh - 190px); min-height: 420px; }
+  main > .card { padding: 20px; overflow-y: auto; }
+  .name { font-size: 26px; font-weight: 700; margin: 0; }
+  .sub { color: #5a6b82; font-size: 14px; margin: 4px 0 16px; }
+  .avatar { width: 100%; aspect-ratio: 3/4; border-radius: 12px; background: linear-gradient(#cfe0f6, #8fb6e4); display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+  .avatar svg { width: 55%; fill: #3f74b5; }
+  select { margin-top: 16px; width: 100%; padding: 8px; font-size: 15px; }
+  .note { background: #f4f7fb; border-left: 4px solid #2f7bd6; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }
+  .note .when { color: #1a56a0; font-weight: 600; font-size: 14px; }
+  #summaryCol { display: flex; flex-direction: column; }
+  #summary { flex: 1; white-space: pre-wrap; background: #f4f7fb; border-radius: 8px; padding: 14px; line-height: 1.5; }
+  #summary:empty { display: none; }
+  .note-box { margin-top: 12px; border: 1px dashed #c3d1e6; border-radius: 8px; padding: 14px; color: #5a6b82; }
+  button { align-self: flex-end; margin-top: 16px; background: #22a55b; color: #fff; border: 0; border-radius: 8px; padding: 12px 20px; font-size: 16px; font-weight: 700; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: wait; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
+</style>
+</head>
+<body>
+<section id="tracker" class="card">
+  <div class="meta"><span>AT request: Speech-generating app</span><span>Updated today</span></div>
+  <div class="track"><div class="fill" id="fill"></div></div>
+</section>
+
+<main>
+  <section class="card">
+    <p class="name" id="name"></p>
+    <p class="sub" id="sub"></p>
+    <div class="avatar"><svg viewBox="0 0 100 100" aria-label="Generic avatar"><circle cx="50" cy="32" r="18"/><path d="M12 100c0-26 16-40 38-40s38 14 38 40z"/></svg></div>
+    <select id="picker" aria-label="Choose a person"></select>
+  </section>
+  <section class="card"><h2>Notes</h2><div id="notes"></div></section>
+  <section class="card" id="summaryCol">
+    <h2>Summary</h2>
+    <div id="summary"></div>
+    <div class="note-box">Summaries describe the notes only. Staff decide what they mean.</div>
+    <button id="go">Summarize notes</button>
+  </section>
+</main>
+
+<script>
+// Stage names are placeholders: edit freely.
+const STAGES = ['Need identified', 'Summary reviewed', 'Evaluation', 'Funding review', 'Decision', 'Delivered'];
+const STEP_MS = 3000; // time per stage; animation stops on the last stage
+const $ = (id) => document.getElementById(id);
+
+// --- Tracker (visual only, driven by timing) ---
+const track = document.querySelector('.track');
+const stageEls = STAGES.map((s) => {
+  const el = document.createElement('div');
+  el.className = 'stage';
+  el.innerHTML = '<div class="dot"></div><span></span>';
+  el.lastChild.textContent = s;
+  track.appendChild(el);
+  return el;
+});
+let cur = 0;
+function showStage() {
+  stageEls.forEach((el, i) => { el.className = 'stage' + (i < cur ? ' done' : i === cur ? ' current' : ''); });
+  $('fill').style.width = (cur / (STAGES.length - 1)) * 84 + '%'; // 84% = track width between first and last dot
+}
+showStage();
+const timer = setInterval(() => { if (++cur >= STAGES.length - 1) clearInterval(timer); showStage(); }, STEP_MS);
+
+// --- Profiles and notes ---
+let people = [], person;
+function show(p) {
+  person = p;
+  $('name').textContent = p.name;
+  $('sub').textContent = p.id + ' · Synthetic profile';
+  $('notes').replaceChildren(...p.notes.map((n) => {
+    const d = document.createElement('div');
+    d.className = 'note';
+    d.innerHTML = '<div class="when"></div><div class="text"></div>';
+    d.firstChild.textContent = n.datetime;   // shown exactly as stored
+    d.lastChild.textContent = n.note;        // shown exactly as stored
+    return d;
+  }));
+  $('summary').textContent = '';
+}
+fetch('/api/people').then((r) => r.json()).then((list) => {
+  people = list;
+  $('picker').replaceChildren(...list.map((p, i) => new Option(p.name + ' (' + p.id + ')', i)));
+  show(list[0]);
+});
+$('picker').onchange = (e) => show(people[e.target.value]);
+
+// --- Summarize: runs only on click ---
+$('go').onclick = async () => {
+  const btn = $('go'), id = person.id;
+  btn.disabled = true;
+  $('summary').textContent = 'Making summary…';
+  try {
+    const r = await fetch('/api/summarize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    const data = await r.json();
+    if (person.id === id) $('summary').textContent = data.summary || data.error;
+  } catch {
+    $('summary').textContent = 'Could not make a summary. Please try again.';
+  }
+  btn.disabled = false;
+};
+</script>
+</body>
+</html>
