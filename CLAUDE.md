@@ -4,7 +4,7 @@
 
 A small prototype for Black Hills Works (BHWS), a provider of services for adults with intellectual and developmental disabilities. It shows how notes about a person could support the process of getting that person assistive technology (AT), and how the handoff of that request could be visible to everyone involved.
 
-This is a show-of-hands prototype. Keep it simple, visual, and easy to demo. Do not overengineer.
+This is a proof-of-concept prototype. Keep it simple, visual, and easy to demo. Do not overengineer.
 
 ## Scope: three elements only
 
@@ -21,6 +21,7 @@ Do not add features beyond these three without asking first.
 Each patient gets one profile card built from the dataset `dummy_notes_200.csv`.
 
 A profile contains only:
+
 - **Name**
 - **Picture** (a placeholder image is fine; use a generic avatar, never a real photo)
 - **Notes** (see section 2)
@@ -30,11 +31,13 @@ Build the list of profiles from the unique `ID` and `Name` values in the CSV. Fi
 ## 2. Notes
 
 Notes are shown **exactly as stored**, with no modification:
+
 - Show each row's `DateTime` and `Note` text as they appear in the CSV.
 - Do not rewrite, correct, capitalize, or clean up note text. The rough, lowercase wording is intentional and part of the realism.
 - Keep notes in chronological order within each profile.
 
 **Summarize button:**
+
 - Add one button labeled something like "Summarize notes."
 - It runs **only when clicked**. Never summarize automatically.
 - It calls the **Claude Haiku** model (the fast, efficient model) to produce a short summary of all of that person's notes.
