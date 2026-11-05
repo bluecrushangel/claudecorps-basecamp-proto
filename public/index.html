@@ -5,65 +5,83 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AT Handoff Prototype</title>
 <style>
+  /* Palette taken from the Black Hills Works Foundation logo (navy + green) with a teal in between. Change here. */
+  :root {
+    --navy: #253085; --teal: #0e8c9a; --teal-d: #0b7a87; --green: #84c441; --green-d: #2a8240;
+    --bg: #f1f7f8; --tint: #eef6f7; --line: #dbe8ea; --ink: #16233b; --muted: #5b6f7a;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 24px; background: #f4f7fb; font-family: system-ui, Arial, sans-serif; color: #12263f; }
-  .card { background: #fff; border: 1px solid #d5e0ef; border-radius: 12px; }
-  /* sticky: top is -20px to cancel the card's 20px padding, so it pins flush to the top */
-  h2 { position: sticky; top: -20px; z-index: 1; background: #fff; margin: -20px -20px 12px; padding: 20px 20px 12px; font-size: 18px; color: #1a56a0; }
+  /* One screen, no page scroll: panels scroll inside themselves. */
+  body { margin: 0; padding: 16px; height: 100vh; overflow: hidden; background: var(--bg); font: 14px system-ui, Arial, sans-serif; color: var(--ink); }
+  #app { max-width: 1180px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 1px 3px rgba(37, 48, 133, .06); }
+  /* sticky: top is -16px to cancel the card's 16px padding, so it pins flush to the top */
+  h2 { position: sticky; top: -16px; z-index: 1; background: #fff; margin: -16px -16px 10px; padding: 16px 16px 10px; border-bottom: 1px solid var(--line); font-size: 16px; color: var(--navy); }
+  #count, #stamp { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
 
-  /* Tracker */
-  #tracker { padding: 16px 24px 20px; margin-bottom: 20px; }
-  .meta { display: flex; justify-content: space-between; color: #5a6b82; font-size: 14px; }
-  .track { position: relative; display: flex; justify-content: space-between; margin-top: 14px; }
-  .track::before, .fill { content: ""; position: absolute; top: 9px; left: 8%; height: 4px; border-radius: 2px; }
-  .track::before { right: 8%; background: #d5e0ef; }
-  .fill { background: #2f7bd6; width: 0; transition: width 2s ease-in-out; }
-  .stage { position: relative; flex: 1; text-align: center; font-size: 14px; color: #5a6b82; }
-  .dot { width: 22px; height: 22px; margin: 0 auto 6px; border-radius: 50%; background: #fff; border: 3px solid #d5e0ef; transition: all 1s; }
-  .stage.done .dot { background: #2f7bd6; border-color: #2f7bd6; }
-  .stage.current .dot { background: #22a55b; border-color: #22a55b; box-shadow: 0 0 0 5px #cdeedb; }
-  .stage.current { color: #12263f; font-weight: 700; }
+  /* Top strip: small logo + tracker */
+  #top { flex: none; display: flex; align-items: center; gap: 20px; padding: 10px 18px; border-top: 3px solid var(--teal); }
+  #top img { height: 34px; width: auto; display: block; flex: none; }
+  #tracker { flex: 1; min-width: 0; }
+  .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+  .track { position: relative; display: flex; justify-content: space-between; margin-top: 8px; }
+  .track::before, .fill { content: ""; position: absolute; top: 6px; left: 8%; height: 4px; border-radius: 2px; }
+  .track::before { right: 8%; background: var(--line); }
+  .fill { background: linear-gradient(90deg, var(--navy), var(--teal), var(--green)); width: 0; transition: width 2s ease-in-out; }
+  .stage { position: relative; flex: 1; text-align: center; font-size: 12px; color: var(--muted); }
+  .dot { width: 16px; height: 16px; margin: 0 auto 4px; border-radius: 50%; background: #fff; border: 3px solid var(--line); transition: all 1s; }
+  .stage.done .dot { background: var(--teal); border-color: var(--teal); }
+  .stage.current .dot { background: var(--green); border-color: var(--green); box-shadow: 0 0 0 4px rgba(132, 196, 65, .3); }
+  .stage.current { color: var(--navy); font-weight: 700; }
 
-  /* Main layout */
-  main { display: grid; grid-template-columns: 1fr 2fr 2fr; gap: 20px; height: calc(100vh - 190px); min-height: 420px; }
-  main > .card { padding: 20px; overflow-y: auto; }
-  .name { font-size: 26px; font-weight: 700; margin: 0; }
-  .sub { color: #5a6b82; font-size: 14px; margin: 4px 0 16px; }
-  .avatar { width: 100%; aspect-ratio: 4/3; border-radius: 12px; background: linear-gradient(#cfe0f6, #8fb6e4); display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
-  .avatar svg { width: 55%; fill: #3f74b5; }
-  select { margin-top: 16px; width: 100%; padding: 8px; font-size: 15px; }
-  .note { background: #f4f7fb; border-left: 4px solid #2f7bd6; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }
-  .note .when { color: #1a56a0; font-weight: 600; font-size: 14px; }
-  #stamp { font-size: 13px; font-weight: 400; color: #5a6b82; margin-left: 8px; }
-  #summaryCol { display: flex; flex-direction: column; }
-  #summary { flex: 1; white-space: pre-wrap; background: #f4f7fb; border-radius: 8px; padding: 14px; line-height: 1.5; }
+  /* Main row: profile | notes | summary */
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: 230px 1fr 1fr; gap: 14px; }
+  main > .card { min-height: 0; padding: 16px; overflow-y: auto; }
+  .name { font-size: 22px; font-weight: 700; margin: 0; color: var(--navy); }
+  .sub { display: inline-block; background: var(--tint); color: var(--teal-d); font-size: 12px; font-weight: 600; margin: 6px 0 12px; padding: 3px 10px; border-radius: 99px; }
+  .avatar { width: 100%; aspect-ratio: 4/3; border-radius: 10px; background: linear-gradient(160deg, #d3efe6, #9ccfe0); display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+  .avatar svg { width: 55%; fill: #247f93; }
+  select, #q { border: 1px solid #b9d4d8; border-radius: 8px; background: #fff; color: var(--ink); }
+  select { margin-top: 12px; width: 100%; padding: 7px; font-size: 14px; }
+  select:focus, #q:focus, button:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+  .note { background: var(--tint); border-left: 4px solid var(--teal); border-radius: 6px; padding: 8px 12px; margin-bottom: 8px; }
+  .note .when { color: var(--navy); font-weight: 600; font-size: 13px; }
+  #tools { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  #tools button { margin: 0; padding: 4px 10px; font-size: 13px; background: #fff; color: var(--teal-d); border: 1px solid #b9d4d8; font-weight: 600; }
+  #tools button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+  #q { flex: 1 1 100%; margin: 0; padding: 6px 8px; font-size: 14px; }
+
+  /* Summary panel: text scrolls, button stays at the bottom */
+  #summaryCol { display: flex; flex-direction: column; overflow: hidden; }
+  #summary { flex: 1 1 auto; min-height: 0; overflow-y: auto; white-space: pre-wrap; background: var(--tint); border-radius: 8px; padding: 12px; line-height: 1.5; }
   #summary:empty { display: none; }
-  .note-box { margin-top: 12px; border: 1px dashed #c3d1e6; border-radius: 8px; padding: 14px; color: #5a6b82; }
-  button { align-self: flex-end; margin-top: 16px; background: #22a55b; color: #fff; border: 0; border-radius: 8px; padding: 12px 20px; font-size: 16px; font-weight: 700; cursor: pointer; }
+  .note-box { margin: 10px 0 auto; border: 1px dashed #b9d4d8; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--muted); }
+  button { align-self: flex-end; margin-top: 12px; background: var(--green-d); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  button:hover:not(:disabled) { filter: brightness(1.08); }
   button:disabled { opacity: .6; cursor: wait; }
-  .loading { display: flex; align-items: center; gap: 10px; color: #5a6b82; }
-  .runner { width: 56px; height: 56px; fill: none; stroke: #2f7bd6; stroke-width: 3; stroke-linecap: round; }
-  .runner .head { fill: #2f7bd6; }
-  .runner g { animation: swing .4s ease-in-out infinite alternate; }
-  .runner .l1 { transform-origin: 30px 36px; } .runner .l2 { transform-origin: 30px 36px; animation-direction: alternate-reverse; }
-  .runner .a1 { transform-origin: 30px 20px; animation-direction: alternate-reverse; } .runner .a2 { transform-origin: 30px 20px; }
-  .runner .body { animation: bob .4s ease-in-out infinite alternate; }
-  @keyframes swing { from { transform: rotate(-40deg); } to { transform: rotate(40deg); } }
-  @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-2px); } }
-  @media (prefers-reduced-motion: reduce) { .runner g, .runner .body { animation: none; } }
-  #tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-  #tools button { margin: 0; padding: 6px 12px; font-size: 14px; background: #fff; color: #1a56a0; border: 1px solid #c3d1e6; font-weight: 600; }
-  #tools button.on { background: #2f7bd6; color: #fff; border-color: #2f7bd6; }
-  #q { flex: 1 1 100%; margin: 0; padding: 8px; font-size: 15px; }
-  #count { color: #5a6b82; font-size: 13px; margin-bottom: 10px; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
+  .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+  .loading img { width: 64px; height: 64px; display: block; }
+
+  /* Small screens: stack and scroll normally */
+  @media (max-width: 900px) {
+    body { height: auto; overflow: visible; }
+    #app { height: auto; }
+    #top { flex-wrap: wrap; gap: 10px; }
+    #tracker { flex: 1 1 100%; }
+    main { grid-template-columns: 1fr; }
+    main > .card, #summaryCol { overflow: visible; }
+  }
 </style>
 </head>
 <body>
-<section id="tracker" class="card">
-  <div class="meta"><span>AT request: Speech-generating app</span><span>Updated today</span></div>
-  <div class="track"><div class="fill" id="fill"></div></div>
-</section>
+<div id="app">
+<header id="top" class="card">
+  <img src="/images/BHWFoundation-2.png" alt="Black Hills Works Foundation">
+  <div id="tracker">
+    <div class="meta"><span>AT request: Speech-generating app</span><span>Updated today</span></div>
+    <div class="track"><div class="fill" id="fill"></div></div>
+  </div>
+</header>
 
 <main>
   <section class="card">
@@ -73,12 +91,11 @@
     <select id="picker" aria-label="Choose a person"></select>
   </section>
   <section class="card">
-    <h2>Notes</h2>
+    <h2>Notes <span id="count"></span></h2>
     <div id="tools">
       <button data-days="1">One day</button><button data-days="7">One week</button><button data-days="30">One month</button><button data-days="0" class="on">All time</button>
-      <input id="q" type="search" placeholder="Search notes by keyword or date/time (e.g. tablet, 2026-10-07, 09:45)" aria-label="Search notes">
+      <input id="q" type="search" placeholder="Search keyword or date/time" aria-label="Search notes by keyword or date and time">
     </div>
-    <div id="count"></div>
     <div id="notes"></div>
   </section>
   <section class="card" id="summaryCol">
@@ -88,6 +105,7 @@
     <button id="go">Summarize notes</button>
   </section>
 </main>
+</div>
 
 <script>
 // Stage names are placeholders: edit freely.
@@ -132,7 +150,7 @@ function renderNotes() {
   const q = $('q').value.trim().toLowerCase().replace(/\//g, '-'); // "10/30" matches "2026-10-30"
   const list = person.notes.filter((n) =>
     n.datetime.slice(0, 10) >= cutoff && (n.datetime + ' ' + n.note).toLowerCase().includes(q));
-  $('count').textContent = 'Showing ' + list.length + ' of ' + person.notes.length + ' notes';
+  $('count').textContent = list.length + ' of ' + person.notes.length + ' notes';
   $('notes').replaceChildren(...list.map((n) => {
     const d = document.createElement('div');
     d.className = 'note';
@@ -169,8 +187,8 @@ fetch('/api/people').then((r) => r.json()).then((list) => {
 $('picker').onchange = (e) => show(people[e.target.value]);
 
 // --- Summarize: runs only on click ---
-// Running stick figure shown while waiting. Static markup, no user data in it.
-const LOADING = '<div class="loading"><svg class="runner" viewBox="0 0 60 60" aria-hidden="true"><g class="body"><circle class="head" cx="30" cy="10" r="6"/><line x1="30" y1="16" x2="30" y2="36"/><g class="a1"><line x1="30" y1="20" x2="30" y2="32"/></g><g class="a2"><line x1="30" y1="20" x2="30" y2="32"/></g><g class="l1"><line x1="30" y1="36" x2="30" y2="53"/></g><g class="l2"><line x1="30" y1="36" x2="30" y2="53"/></g></g></svg><span>Making summary…</span></div>';
+// Loading animation shown while waiting. Static markup, no user data in it.
+const LOADING = '<div class="loading"><img src="/images/claude-claude-code.gif" alt=""><span>Making summary…</span></div>';
 $('go').onclick = async () => {
   const btn = $('go'), id = person.id;
   btn.disabled = true;

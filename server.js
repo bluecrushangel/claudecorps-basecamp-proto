@@ -21,6 +21,7 @@ people.forEach((p) => p.notes.sort((a, b) => a.datetime.localeCompare(b.datetime
 const app = express();
 app.use(express.json());
 app.use(express.static('public'));
+app.use('/images', express.static('src/images')); // logo lives in src/images
 
 app.get('/api/people', (_req, res) => res.json(people));
 
