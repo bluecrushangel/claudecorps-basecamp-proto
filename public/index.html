@@ -41,6 +41,21 @@
   .note-box { margin-top: 12px; border: 1px dashed #c3d1e6; border-radius: 8px; padding: 14px; color: #5a6b82; }
   button { align-self: flex-end; margin-top: 16px; background: #22a55b; color: #fff; border: 0; border-radius: 8px; padding: 12px 20px; font-size: 16px; font-weight: 700; cursor: pointer; }
   button:disabled { opacity: .6; cursor: wait; }
+  .loading { display: flex; align-items: center; gap: 10px; color: #5a6b82; }
+  .runner { width: 56px; height: 56px; fill: none; stroke: #2f7bd6; stroke-width: 3; stroke-linecap: round; }
+  .runner .head { fill: #2f7bd6; }
+  .runner g { animation: swing .4s ease-in-out infinite alternate; }
+  .runner .l1 { transform-origin: 30px 36px; } .runner .l2 { transform-origin: 30px 36px; animation-direction: alternate-reverse; }
+  .runner .a1 { transform-origin: 30px 20px; animation-direction: alternate-reverse; } .runner .a2 { transform-origin: 30px 20px; }
+  .runner .body { animation: bob .4s ease-in-out infinite alternate; }
+  @keyframes swing { from { transform: rotate(-40deg); } to { transform: rotate(40deg); } }
+  @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-2px); } }
+  @media (prefers-reduced-motion: reduce) { .runner g, .runner .body { animation: none; } }
+  #tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  #tools button { margin: 0; padding: 6px 12px; font-size: 14px; background: #fff; color: #1a56a0; border: 1px solid #c3d1e6; font-weight: 600; }
+  #tools button.on { background: #2f7bd6; color: #fff; border-color: #2f7bd6; }
+  #q { flex: 1 1 100%; margin: 0; padding: 8px; font-size: 15px; }
+  #count { color: #5a6b82; font-size: 13px; margin-bottom: 10px; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
 </style>
 </head>
@@ -57,7 +72,15 @@
     <div class="avatar"><svg viewBox="0 0 100 100" aria-label="Generic avatar"><circle cx="50" cy="32" r="18"/><path d="M12 100c0-26 16-40 38-40s38 14 38 40z"/></svg></div>
     <select id="picker" aria-label="Choose a person"></select>
   </section>
-  <section class="card"><h2>Notes</h2><div id="notes"></div></section>
+  <section class="card">
+    <h2>Notes</h2>
+    <div id="tools">
+      <button data-days="1">One day</button><button data-days="7">One week</button><button data-days="30">One month</button><button data-days="0" class="on">All time</button>
+      <input id="q" type="search" placeholder="Search notes by keyword or date/time (e.g. tablet, 2026-10-07, 09:45)" aria-label="Search notes">
+    </div>
+    <div id="count"></div>
+    <div id="notes"></div>
+  </section>
   <section class="card" id="summaryCol">
     <h2>Summary <span id="stamp"></span></h2>
     <div id="summary"></div>
@@ -69,7 +92,8 @@
 <script>
 // Stage names are placeholders: edit freely.
 const STAGES = ['Need identified', 'Summary reviewed', 'Evaluation', 'Funding review', 'Decision', 'Delivered'];
-const STEP_MS = 3000; // time per stage; animation stops on the last stage
+const STEP_MS = 35000; // time per stage; animation stops on the last stage
+const TODAY = '2026-10-30'; // assumption: fixed "today" for the demo, so the filters work on the synthetic data
 const $ = (id) => document.getElementById(id);
 
 // --- Tracker (visual only, driven by timing) ---
@@ -87,16 +111,29 @@ function showStage() {
   stageEls.forEach((el, i) => { el.className = 'stage' + (i < cur ? ' done' : i === cur ? ' current' : ''); });
   $('fill').style.width = (cur / (STAGES.length - 1)) * 84 + '%'; // 84% = track width between first and last dot
 }
-showStage();
-const timer = setInterval(() => { if (++cur >= STAGES.length - 1) clearInterval(timer); showStage(); }, STEP_MS);
+let timer;
+function startTracker() { // also called on every profile switch: nothing is saved, it just restarts
+  clearInterval(timer);
+  cur = 0;
+  showStage();
+  timer = setInterval(() => { if (++cur >= STAGES.length - 1) clearInterval(timer); showStage(); }, STEP_MS);
+}
+startTracker();
 
 // --- Profiles and notes ---
-let people = [], person;
-function show(p) {
-  person = p;
-  $('name').textContent = p.name;
-  $('sub').textContent = p.id + ' · Synthetic profile';
-  $('notes').replaceChildren(...p.notes.map((n) => {
+let people = [], person, days = 0; // days: 0 = all time
+function renderNotes() {
+  let cutoff = '';
+  if (days) { // window counts back from TODAY, inclusive (1 = today only)
+    const d = new Date(TODAY + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() - (days - 1));
+    cutoff = d.toISOString().slice(0, 10);
+  }
+  const q = $('q').value.trim().toLowerCase().replace(/\//g, '-'); // "10/30" matches "2026-10-30"
+  const list = person.notes.filter((n) =>
+    n.datetime.slice(0, 10) >= cutoff && (n.datetime + ' ' + n.note).toLowerCase().includes(q));
+  $('count').textContent = 'Showing ' + list.length + ' of ' + person.notes.length + ' notes';
+  $('notes').replaceChildren(...list.map((n) => {
     const d = document.createElement('div');
     d.className = 'note';
     d.innerHTML = '<div class="when"></div><div class="text"></div>';
@@ -104,9 +141,26 @@ function show(p) {
     d.lastChild.textContent = n.note;        // shown exactly as stored
     return d;
   }));
+}
+function show(p) {
+  person = p;
+  $('name').textContent = p.name;
+  $('sub').textContent = p.id + ' · Synthetic profile';
+  days = 0; $('q').value = '';
+  document.querySelectorAll('#tools button').forEach((b) => b.classList.toggle('on', b.dataset.days === '0'));
+  renderNotes();
   $('summary').textContent = '';
   $('stamp').textContent = '';
+  startTracker();
 }
+document.querySelectorAll('#tools button').forEach((b) => {
+  b.onclick = () => {
+    days = +b.dataset.days;
+    document.querySelectorAll('#tools button').forEach((x) => x.classList.toggle('on', x === b));
+    renderNotes();
+  };
+});
+$('q').oninput = renderNotes;
 fetch('/api/people').then((r) => r.json()).then((list) => {
   people = list;
   $('picker').replaceChildren(...list.map((p, i) => new Option(p.name + ' (' + p.id + ')', i)));
@@ -115,10 +169,12 @@ fetch('/api/people').then((r) => r.json()).then((list) => {
 $('picker').onchange = (e) => show(people[e.target.value]);
 
 // --- Summarize: runs only on click ---
+// Running stick figure shown while waiting. Static markup, no user data in it.
+const LOADING = '<div class="loading"><svg class="runner" viewBox="0 0 60 60" aria-hidden="true"><g class="body"><circle class="head" cx="30" cy="10" r="6"/><line x1="30" y1="16" x2="30" y2="36"/><g class="a1"><line x1="30" y1="20" x2="30" y2="32"/></g><g class="a2"><line x1="30" y1="20" x2="30" y2="32"/></g><g class="l1"><line x1="30" y1="36" x2="30" y2="53"/></g><g class="l2"><line x1="30" y1="36" x2="30" y2="53"/></g></g></svg><span>Making summary…</span></div>';
 $('go').onclick = async () => {
   const btn = $('go'), id = person.id;
   btn.disabled = true;
-  $('summary').textContent = 'Making summary…';
+  $('summary').innerHTML = LOADING;
   $('stamp').textContent = '';
   try {
     const r = await fetch('/api/summarize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
