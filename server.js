@@ -32,11 +32,13 @@ app.post('/api/summarize', async (req, res) => {
     const client = new Anthropic(); // reads ANTHROPIC_API_KEY from env
     const msg = await client.messages.create({
       model: MODEL,
-      max_tokens: 500,
+      max_tokens: 4000, // headroom: the model may spend tokens on a thinking block before the text
       system: SYSTEM,
       messages: [{ role: 'user', content: p.notes.map((n) => `${n.datetime} ${n.note}`).join('\n') }],
     });
-    res.json({ summary: msg.content[0].text });
+    const text = msg.content.find((b) => b.type === 'text')?.text;
+    if (!text) throw new Error('no text in response, stop_reason=' + msg.stop_reason);
+    res.json({ summary: text });
   } catch (e) {
     console.error(e.message);
     res.status(500).json({ error: 'Could not make a summary. Please try again.' });
